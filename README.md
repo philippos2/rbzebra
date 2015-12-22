@@ -1,0 +1,2 @@
+# rbzebra
+reversi by ruby
