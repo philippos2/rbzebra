@@ -1,3 +1,7 @@
+#! /bin/sh
+exec ruby -S -x "$0" "$@"
+#! ruby
+
 require "pry"
 
 class Game
@@ -47,14 +51,17 @@ class Game
     end
   end
 
-  def ai_turn(turn:)
-    blanks = @board.each_with_index.select {|kind, index| kind == Game::BLANK }.map {|n| n.last }
+  def puttable?(turn:, index: nil)
+    if index.nil?
+      blanks = @board.each_with_index.select {|kind, index| kind == Game::BLANK }.map {|n| n.last }
+      !blanks.select {|index| !loot(turn: turn, index: index).empty? }.empty?
+    else
+      loot(turn: Game::BLACK, index: index).length > 0
+    end
+  end
 
-    valuations = blanks.map {|index|
-      [index, test(turn: turn, index: index).map {|target| @values[target] }.inject(:+)]
-    }.select {|valuation|
-      valuation.last
-    }.sort_by {|valuation| valuation.last }
+  def ai_turn(turn:)
+    valuations = valuate(turn: turn)
 
     return false if valuations.empty?
 
@@ -64,45 +71,55 @@ class Game
   end
 
   def flip(turn:, index:)
-    targets = test(turn: turn, index: index)
+    loots = loot(turn: turn, index: index)
 
-    return false unless targets.length > 0
+    return false unless loots.length > 0
 
     @board[index] = turn
-    targets.each do |target|
-      @board[target] = turn
+    loots.each do |loot|
+      @board[loot] = turn
     end
 
     true
   end
 
-  def test(turn:, index:)
-    targets = [-10, -9, -8, -1, 1, 8, 9, 10].map do |dir|
-      test_line(turn: turn, index: index, dir: dir)
-    end
-    targets.flatten!
-    targets.unshift(index) unless targets.empty?
-    targets
-  end
-
   private
 
-  def test_line(turn:, index:, dir:)
-    target = index + dir
+  def valuate(turn:)
+    blanks = @board.each_with_index.select {|kind, index| kind == Game::BLANK }.map {|n| n.last }
 
-    while board[target] == ((turn == Game::WHITE) ? Game::BLACK : Game::WHITE) do
-      target += dir
+    valuations = blanks.map {|index|
+      [index, loot(turn: turn, index: index).map {|loot| @values[loot] }.inject(:+)]
+    }.select {|valuation|
+      valuation.last
+    }.map {|valuation|
+      [valuation.first, valuation.last + @values[valuation.first]]
+    }.sort_by {|valuation| valuation.last }
+  end
+
+  def loot(turn:, index:)
+    loots = [-10, -9, -8, -1, 1, 8, 9, 10].map do |direction|
+      loot_line(turn: turn, index: index, direction: direction)
+    end
+    loots.flatten
+  end
+
+  def loot_line(turn:, index:, direction:)
+    marker = index + direction
+
+    while board[marker] == ((turn == Game::WHITE) ? Game::BLACK : Game::WHITE) do
+      marker += direction
     end
 
-    return [] if board[target] != turn
+    return [] if board[marker] != turn
 
-    targets = []
-    target -= dir
-    while target != index do
-      targets << target
-      target -= dir
+    loots = []
+    marker -= direction
+    while marker != index do
+      loots << marker
+      marker -= direction
     end
-    targets
+    loots
   end
 end
 
@@ -129,23 +146,38 @@ loop do
     exit
   end
 
-  print "your turn. you are BLACK(X) > "
+  print "your turn. you are BLACK(X)\nselect cell, pass, quit or display > "
   got = gets.chomp
 
-  next unless got.match(/((A|B|C|D|E|F|G|H)(1|2|3|4|5|6|7|8)|quit)/)
-  exit if got == "quit"
+  next unless got.match(/((A|B|C|D|E|F|G|H)(1|2|3|4|5|6|7|8)|display|pass|quit)/)
 
-  locate = eval("Game::#{got}")
-  next unless game.test(turn: Game::BLACK, index: locate).length > 0
+  case got
+  when "quit" then
+    exit
+  when "display" then
+    game.display
+    next
+  when "pass" then
+    unless game.puttable?(turn: Game::BLACK)
+      puts "pass !"
+    else
+      puts "you can't pass. try again."
+      game.display
+      next
+    end
+  else
+    index = eval("Game::#{got}")
+    next unless game.puttable?(turn: Game::BLACK, index: index)
 
-  puts "\n==== your choice ===="
-  game.flip(turn: Game::BLACK, index: locate)
-  game.display
+    puts "\n==== your choice ===="
+    game.flip(turn: Game::BLACK, index: index)
+    game.display
+  end
 
   puts "\n==== AI turn ===="
   result = game.ai_turn(turn: Game::WHITE)
   game.display
 
-  puts "\n==== AI turn have passed. ====" unless result
+  puts "\n==== AI passed. ====" unless result
 end
 
