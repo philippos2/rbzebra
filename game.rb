@@ -54,14 +54,21 @@ class Game
   def puttable?(turn:, index: nil)
     if index.nil?
       blanks = @board.each_with_index.select {|kind, index| kind == Game::BLANK }.map {|n| n.last }
-      !blanks.select {|index| !loot(turn: turn, index: index).empty? }.empty?
+      !blanks.select {|index| !loot(board: @board, turn: turn, index: index).empty? }.empty?
     else
-      loot(turn: Game::BLACK, index: index).length > 0
+      loot(board: @board, turn: Game::BLACK, index: index).length > 0
     end
   end
 
   def ai_turn(turn:)
-    valuations = valuate(turn: turn)
+    blanks = @board.each_with_index.select {|kind, index| kind == Game::BLANK }.map {|n| n.last }
+    valuations = blanks.select {|index|
+      !loot(board: @board, turn: turn, index: index).empty?
+    }.map{|index|
+      new_board = @board.dup
+      flip(board: new_board, turn: turn, index: index)
+      [index, minimax(board: new_board, turn: Game::WHITE, depth: 5)]
+    }.sort_by {|valuation| valuation.last }
 
     return false if valuations.empty?
 
@@ -70,14 +77,14 @@ class Game
     true
   end
 
-  def flip(turn:, index:)
-    loots = loot(turn: turn, index: index)
+  def flip(board: @board, turn:, index:)
+    loots = loot(board: board, turn: turn, index: index)
 
     return false unless loots.length > 0
 
-    @board[index] = turn
+    board[index] = turn
     loots.each do |loot|
-      @board[loot] = turn
+      board[loot] = turn
     end
 
     true
@@ -85,26 +92,45 @@ class Game
 
   private
 
-  def valuate(turn:)
-    blanks = @board.each_with_index.select {|kind, index| kind == Game::BLANK }.map {|n| n.last }
+  def minimax(board:, turn:, depth:)
+    return valuate(board: board, turn: Game::WHITE) until depth > 0
 
-    valuations = blanks.map {|index|
-      [index, loot(turn: turn, index: index).map {|loot| @values[loot] }.inject(:+)]
-    }.select {|valuation|
-      valuation.last
-    }.map {|valuation|
-      [valuation.first, valuation.last + @values[valuation.first]]
-    }.sort_by {|valuation| valuation.last }
+    if turn == Game::WHITE
+      max = -1000
+    else
+      max = 1000
+    end
+
+    blanks = board.each_with_index.select {|kind, index| kind == Game::BLANK }.map {|n| n.last }
+    blanks.select {|index| !loot(board: board, turn: turn, index: index).empty? }.each {|index|
+      new_board = board.dup
+      flip(board: new_board, turn: turn, index: index)
+      value = minimax(board: new_board, turn: ((turn == Game::WHITE) ? Game::BLACK : Game::WHITE), depth: depth - 1)
+      next if value.nil?
+
+      if turn == Game::WHITE
+        max = value if max < value
+      else
+        max = value if max > value
+      end
+    }
+
+    max
   end
 
-  def loot(turn:, index:)
+  def valuate(board:, turn:)
+    indexes = board.each_with_index.select {|kind, index| kind == turn }.map {|n| n.last }
+    indexes.map {|index| @values[index] }.inject(:+)
+  end
+
+  def loot(board:, turn:, index:)
     loots = [-10, -9, -8, -1, 1, 8, 9, 10].map do |direction|
-      loot_line(turn: turn, index: index, direction: direction)
+      loot_line(board: board, turn: turn, index: index, direction: direction)
     end
     loots.flatten
   end
 
-  def loot_line(turn:, index:, direction:)
+  def loot_line(board:, turn:, index:, direction:)
     marker = index + direction
 
     while board[marker] == ((turn == Game::WHITE) ? Game::BLACK : Game::WHITE) do
@@ -149,7 +175,7 @@ loop do
   print "your turn. you are BLACK(X)\nselect cell, pass, quit or display > "
   got = gets.chomp
 
-  next unless got.match(/((A|B|C|D|E|F|G|H)(1|2|3|4|5|6|7|8)|display|pass|quit)/)
+  next unless got.match(/(^(A|B|C|D|E|F|G|H)(1|2|3|4|5|6|7|8)$|display|pass|quit)/)
 
   case got
   when "quit" then
