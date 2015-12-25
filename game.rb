@@ -93,7 +93,11 @@ class Game
   private
 
   def minimax(board:, turn:, depth:)
-    return valuate(board: board, turn: Game::WHITE) until depth > 0
+    until depth > 0
+      white_valuate = valuate(board: board, turn: Game::WHITE) || -1000
+      black_valuate = valuate(board: board, turn: Game::BLACK) || 1000
+      return white_valuate - black_valuate
+    end
 
     if turn == Game::WHITE
       max = -1000
@@ -106,7 +110,6 @@ class Game
       new_board = board.dup
       flip(board: new_board, turn: turn, index: index)
       value = minimax(board: new_board, turn: ((turn == Game::WHITE) ? Game::BLACK : Game::WHITE), depth: depth - 1)
-      next if value.nil?
 
       if turn == Game::WHITE
         max = value if max < value
