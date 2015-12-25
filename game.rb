@@ -56,7 +56,7 @@ class Game
       blanks = @board.each_with_index.select {|kind, index| kind == Game::BLANK }.map {|n| n.last }
       !blanks.select {|index| !loot(board: @board, turn: turn, index: index).empty? }.empty?
     else
-      loot(board: @board, turn: Game::BLACK, index: index).length > 0
+      @board[index] == Game::BLANK && loot(board: @board, turn: turn, index: index).length > 0
     end
   end
 
@@ -67,7 +67,7 @@ class Game
     }.map{|index|
       new_board = @board.dup
       flip(board: new_board, turn: turn, index: index)
-      [index, minimax(board: new_board, turn: Game::WHITE, depth: 5)]
+      [index, minimax(board: new_board, turn: Game::WHITE, depth: 4)]
     }.sort_by {|valuation| valuation.last }
 
     return false if valuations.empty?
@@ -123,7 +123,12 @@ class Game
 
   def valuate(board:, turn:)
     indexes = board.each_with_index.select {|kind, index| kind == turn }.map {|n| n.last }
-    indexes.map {|index| @values[index] }.inject(:+)
+    valuation = indexes.map {|index| @values[index] }.inject(:+)
+
+    blanks = board.each_with_index.select {|kind, index| kind == Game::BLANK }.map {|n| n.last }
+    valuation += blanks.select {|index| !loot(board: board, turn: turn, index: index).empty? }.length
+
+    valuation
   end
 
   def loot(board:, turn:, index:)
