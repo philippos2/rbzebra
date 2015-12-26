@@ -67,7 +67,7 @@ class Game
     }.map{|index|
       new_board = @board.dup
       flip(board: new_board, turn: turn, index: index)
-      [index, minimax(board: new_board, turn: Game::WHITE, depth: 4)]
+      [index, minimax(board: new_board, turn: Game::WHITE, depth: 3)]
     }.sort_by {|valuation| valuation.last }
 
     return false if valuations.empty?
@@ -93,7 +93,7 @@ class Game
   private
 
   def minimax(board:, turn:, depth:)
-    until depth > 0
+    unless depth > 0
       white_valuate = valuate(board: board, turn: Game::WHITE) || -1000
       black_valuate = valuate(board: board, turn: Game::BLACK) || 1000
       return white_valuate - black_valuate
@@ -124,11 +124,38 @@ class Game
   def valuate(board:, turn:)
     indexes = board.each_with_index.select {|kind, index| kind == turn }.map {|n| n.last }
     valuation = indexes.map {|index| @values[index] }.inject(:+)
+    return if valuation.nil?
 
     blanks = board.each_with_index.select {|kind, index| kind == Game::BLANK }.map {|n| n.last }
     valuation += blanks.select {|index| !loot(board: board, turn: turn, index: index).empty? }.length
 
+    valuation += (count_fixed(board: board, turn: turn) * 3)
+
     valuation
+  end
+
+  def count_fixed(board:, turn:)
+    fixed = [Game::A1, Game::A8, Game::H1, Game::A8].map do |index|
+      [-9, -1, 1, 9].map do |direction|
+        if board[index] == turn
+          marker = index + direction
+
+          while board[marker] == turn do
+            marker += direction
+          end
+
+          fixed = []
+          marker -= direction
+          while marker != index do
+            fixed << marker
+            marker -= direction
+          end
+          fixed.unshift(index)
+        end
+      end
+    end
+
+    fixed.flatten.uniq.compact.length
   end
 
   def loot(board:, turn:, index:)
